@@ -1,0 +1,22 @@
+# BDD100K dataset http://cocodataset.org
+# Train command: python train.py --data bdd.yaml
+# Default dataset location is next to /yolov5:
+#   /parent_folder
+#     /coco
+#     /yolov5
+
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: /data1/zefeng/datasets/bdd100k/coco/images/train/  # 70k images
+val: /data1/zefeng/datasets/bdd100k/coco/images/val/  # 10k images
+
+# number of classes
+nc: 10
+
+# class names
+names: ["person","rider","car","bus","truck","bike","motor","traffic light","traffic sign","train",]
+
+# Print classes
+# with open('data/coco.yaml') as f:
+#   d = yaml.load(f, Loader=yaml.FullLoader)  # dict
+#   for i, x in enumerate(d['names']):
+#     print(i, x)
