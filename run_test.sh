@@ -19,4 +19,4 @@ python test.py --data ./data/bdd_night.yaml --weights runs/train/bdd_daytime_map
 python test.py --data ./data/cityscapes.yaml --weights runs/train/exp38/weights/last.pt --img 640 --conf 0.001 --iou 0.5
 
 python test.py --data ./data/foggy_cityscapes.yaml --weights runs/train/exp37/weights/best.pt --img 640 --conf 0.001 --iou 0.5
-python test.py --data ./data/foggy_cityscapes.yaml --weights runs/train/exp39/weights/best.pt --img 640 --conf 0.001 --iou 0.5
+python test.py --data ./data/foggy_cityscapes.yaml --weights runs/train/exp43/weights/best.pt --img 640 --conf 0.001 --iou 0.5

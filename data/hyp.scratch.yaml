@@ -32,4 +32,4 @@ fliplr: 0.5  # image flip left-right (probability)
 mosaic: 1.0  # image mosaic (probability)
 mixup: 0.0  # image mixup (probability)
 da_pw: 1.0 # da BCELoss positive_weight
-da_img: 0.01 # da loss_img weight
+da_img: 0.1 # da loss_img weight
