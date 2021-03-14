@@ -266,12 +266,12 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
-        mloss = torch.zeros(5, device=device)  # mean losses
+        mloss = torch.zeros(6, device=device)  # mean losses
         if rank != -1:
             sdataloader.sampler.set_epoch(epoch)
             tdataloader.sampler.set_epoch(epoch)
         pbar = enumerate(zip(sdataloader, tdataloader))
-        logger.info(('\n' + '%10s' * 9) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'da', 'total', 'targets', 'img_size'))
+        logger.info(('\n' + '%10s' * 10) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'da_img', 'da_ins', 'total', 'targets', 'img_size'))
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
@@ -327,7 +327,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             if rank in [-1, 0]:
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-                s = ('%10s' * 2 + '%10.4g' * 7) % (
+                s = ('%10s' * 2 + '%10.4g' * 8) % (
                     '%g/%g' % (epoch, epochs - 1), mem, *mloss, stargets.shape[0], simgs.shape[-1])
                 pbar.set_description(s)
 

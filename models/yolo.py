@@ -11,7 +11,7 @@ import torch.nn as nn
 sys.path.append('./')  # to run '$ python *.py' files in subdirectories
 logger = logging.getLogger(__name__)
 
-from models.common import Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, Concat, NMS, autoShape, Adaptative_Conv
+from models.common import Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, Concat, NMS, autoShape, Adaptative_Conv, DAInsHead
 from models.experimental import MixConv2d, CrossConv, C3
 from utils.autoanchor import check_anchor_order
 from utils.general import make_divisible, check_file, set_logging
@@ -83,7 +83,7 @@ class Model(nn.Module):
             logger.info('Overriding model.yaml nc=%g with nc=%g' % (self.yaml['nc'], nc))
             self.yaml['nc'] = nc  # override yaml value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist, ch_out
-        self.da_layers = [25, 26, 27]
+        self.da_layers = [25, 26, 27, 28]
         self.grl_img = GradientScalarLayer(-1.0 * .1)
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
@@ -91,7 +91,7 @@ class Model(nn.Module):
         # Build strides, anchors
         m = self.model[24]  # Detect()
         if isinstance(m, Detect):
-            s = 128  # 2x min stride
+            s = 640  # 2x min stride
             output, _ = self.forward(torch.zeros(2, ch, s, s))
             m.stride = torch.tensor([s / x.shape[-2] for x in output])  # forward
             m.anchors /= m.stride.view(-1, 1, 1)
@@ -105,7 +105,7 @@ class Model(nn.Module):
         self.info()
         logger.info('')
 
-    def forward(self, x, bs=0, da=False, alpha=1.0, augment=False, profile=False):
+    def forward(self, x, testing=False, bs=0, da=False, alpha=1.0, augment=False, profile=False):
         if augment:
             img_size = x.shape[-2:]  # height, width
             s = [1, 0.83, 0.67]  # scales
@@ -123,9 +123,9 @@ class Model(nn.Module):
                 y.append(yi)
             return torch.cat(y, 1), None  # augmented inference, train
         else:
-            return self.forward_once(x, bs, alpha, da, profile)  # single-scale inference, train
+            return self.forward_once(x, testing, bs, alpha, da, profile)  # single-scale inference, train
 
-    def forward_once(self, x, bs=0, alpha=1.0, da=False, profile=False):
+    def forward_once(self, x, testing=False, bs=0, alpha=1.0, da=False, profile=False):
         y, dt, da_save = [], [], []  # outputs
         for m in self.model:
             if m.f != -1:  # if not from previous layer
@@ -142,6 +142,7 @@ class Model(nn.Module):
             if m.i != 24:
                 if m.i in [25, 26, 27]:     # GRL img_feature
                     x = self.grl_img(x, alpha=alpha)
+                if testing and m.i >= 28: continue
                 x = m(x)  # run
                 y.append(x if m.i in self.save else None)  # save output
 
@@ -234,8 +235,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                 pass
 
         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [Conv, Adaptative_Conv, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
-            (c1, c2) = (ch[f], args[0]) if i not in [25, 26, 27] else (ch[f+1], args[0])
+        if m in [Conv, Adaptative_Conv, DAInsHead, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
+            (c1, c2) = (ch[f], args[0]) if i not in [25, 26, 27, 28, 29, 30] else (ch[f+1], args[0])
 
             if i <= 24: # detect model
                 c2 = make_divisible(c2 * gw, 8) if c2 != no else c2

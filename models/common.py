@@ -57,6 +57,30 @@ class Adaptative_Conv(nn.Module):
     def fuseforward(self, x):
         return self.act(self.conv(x))
 
+class DAInsHead(nn.Module):
+    """
+    Adds a simple Instance-level Domain Classifier head
+    """
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):
+        super(DAInsHead, self).__init__()
+        self.conv = nn.Conv2d(c1, 1, kernel_size=1, stride=1)
+        self.fc1_da = nn.Linear(c2, 512)
+        self.fc2_da = nn.Linear(512, c2)
+        for l in [self.fc1_da, self.conv]:
+            nn.init.normal_(l.weight, std=0.1)
+            nn.init.constant_(l.bias, 0)
+        nn.init.normal_(self.fc2_da.weight, std=0.05)
+        nn.init.constant_(self.fc2_da.bias, 0)
+
+    def forward(self, x):
+        x = F.relu(self.conv(x))
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1_da(x))
+        x = F.dropout(x, p=0.5, training=self.training)
+
+        x = self.fc2_da(x)
+        return x
 
 class Bottleneck(nn.Module):
     # Standard bottleneck

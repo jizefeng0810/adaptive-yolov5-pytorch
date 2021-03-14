@@ -16,4 +16,4 @@ python train.py \
 
 python train.py --sdata ./data/cityscapes.yaml --tdata ./data/foggy_cityscapes.yaml --epochs 200 --batch-size 32 --weights ./weights/yolov5s.pt --cfg yolos.yaml
 
-python train.py --sdata ./data/cityscapes.yaml --tdata ./data/foggy_cityscapes.yaml --epochs 200 --batch-size 32 --weights runs/train/exp45/weights/last.pt --cfg yolos.yaml --resume
+python train.py --sdata ./data/cityscapes.yaml --tdata ./data/foggy_cityllscapes.yaml --epochs 200 --batch-size 32 --weights runs/train/exp48/weights/last.pt --cfg yolos.yaml --resume
