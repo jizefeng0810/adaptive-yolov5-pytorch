@@ -83,7 +83,7 @@ class Model(nn.Module):
             logger.info('Overriding model.yaml nc=%g with nc=%g' % (self.yaml['nc'], nc))
             self.yaml['nc'] = nc  # override yaml value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist, ch_out
-        self.da_layers = [25, 26, 27, 28]
+        self.da_layers = [25, 26, 27, 28, 29, 30]
         self.grl_img = GradientScalarLayer(-1.0 * .1)
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
@@ -140,9 +140,9 @@ class Model(nn.Module):
                 print('%10.1f%10.0f%10.1fms %-40s' % (o, m.np, dt[-1], m.type))
 
             if m.i != 24:
-                if m.i in [25, 26, 27]:     # GRL img_feature
-                    x = self.grl_img(x, alpha=alpha)
                 if testing and m.i >= 28: continue
+                if m.i in [25, 26, 27, 28, 29, 30]:     # GRL img_feature
+                    x = self.grl_img(x, alpha=alpha)
                 x = m(x)  # run
                 y.append(x if m.i in self.save else None)  # save output
 

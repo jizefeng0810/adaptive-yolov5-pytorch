@@ -225,7 +225,7 @@ class Detections:
         self.imgs = imgs  # list of images as numpy arrays
         self.pred = pred  # list of tensors pred[0] = (xyxy, conf, cls)
         self.names = names  # class names
-        self.xyxy = pred  # xyxy pixels
+        self.xyxy = pred  # xyxy pixels2tian
         self.xywh = [xyxy2xywh(x) for x in pred]  # xywh pixels
         self.xyxyn = [x / g for x, g in zip(self.xyxy, gn)]  # xyxy normalized
         self.xywhn = [x / g for x, g in zip(self.xywh, gn)]  # xywh normalized

@@ -103,7 +103,7 @@ def compute_loss(p, targets, model, da_p=None):  # predictions, targets, model
     # Focal loss
     g = h['fl_gamma']  # focal loss gamma
     if g > 0:
-        BCEcls, BCEobj, BCEda_img = FocalLoss(BCEcls, g), FocalLoss(BCEobj, g), FocalLoss(BCEda_img, g)
+        BCEcls, BCEobj, BCEda_img, BCEda_ins = FocalLoss(BCEcls, g), FocalLoss(BCEobj, g), FocalLoss(BCEda_img, g), FocalLoss(BCEda_ins, g)
     # BCEda_img = FocalLoss(BCEda_img, 1.5)
 
     # da classifier loss
@@ -115,8 +115,8 @@ def compute_loss(p, targets, model, da_p=None):  # predictions, targets, model
                 lda_img += BCEda_img(da_img_pre, da_img_target)
             else:
                 bs, n = da_img_pre.size()
-                da_img_target = torch.cat((torch.zeros((bs // 2, n)), (torch.ones(bs // 2, n)))).to(device)
-                lda_ins += BCEda_ins(da_img_pre, da_img_target)
+                da_ins_target = torch.cat((torch.zeros((bs // 2, n)), (torch.ones(bs // 2, n)))).to(device)
+                lda_ins += BCEda_ins(da_img_pre, da_ins_target)
 
     # Losses
     nt = 0  # number of targets
