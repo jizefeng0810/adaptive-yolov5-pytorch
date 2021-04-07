@@ -202,7 +202,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                                               world_size=opt.world_size, workers=opt.workers,
                                               image_weights=opt.image_weights)
     mlc = np.concatenate(tdataset.labels, 0)[:, 0].max()  # max label class
-    nb = len(tdataloader)  # number of batches
+    # nb = len(tdataloader)  # number of batches
     assert mlc < tnc, 'Target domain label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, tnc, opt.tdata, tnc - 1)
 
     # Process 0
@@ -278,11 +278,14 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         for i, (sbatch, tbatch) in pbar:  # batch -------------------------------------------------------------
             simgs, stargets, spaths, _ = sbatch
             timgs, ttargets, tpaths, _ = tbatch
+
+            bs_simgs, _, _, _ = simgs.shape
+            # timgs, ttargets, tpaths = timgs[:bs_simgs], ttargets[:bs_simgs], tpaths[:bs_simgs]
+
             ni = i + nb * epoch  # number integrated batches (since train start)
             simgs = simgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
             timgs = timgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
             imgs = torch.cat((simgs, timgs))
-            bs_simgs, _, _, _ = simgs.shape
 
             p = float((ni + 1.) / (nb * epochs))
             alpha = (2. / (1. + np.exp(-10 * p)) - 1)

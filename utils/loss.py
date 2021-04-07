@@ -104,7 +104,7 @@ def compute_loss(p, targets, model, da_p=None):  # predictions, targets, model
     g = h['fl_gamma']  # focal loss gamma
     if g > 0:
         BCEcls, BCEobj, BCEda_img, BCEda_ins = FocalLoss(BCEcls, g), FocalLoss(BCEobj, g), FocalLoss(BCEda_img, g), FocalLoss(BCEda_ins, g)
-    # BCEda_img = FocalLoss(BCEda_img, 1.5)
+        # BCEcls, BCEobj, BCEda_img = FocalLoss(BCEcls, g), FocalLoss(BCEobj, g), FocalLoss(BCEda_img, g)
 
     # da classifier loss
     if da_p != None:

@@ -151,7 +151,7 @@ class Model(nn.Module):
             else:
                 if da == True:
                     x_output = x
-                    for i,s in enumerate(x):
+                    for i, s in enumerate(x):
                         all_bs, _, _, _ = s.shape
                         s, _ = torch.split(s, [bs, all_bs-bs])
                         x_output[i] = s
