@@ -86,7 +86,7 @@ def test(data,
         img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
         _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
         path = data['test'] if opt.task == 'test' else data['val']  # path to val/test images
-        dataloader = create_dataloader(path, imgsz, batch_size, model.stride.max(), opt, pad=0.5, rect=True)[0]
+        dataloader = create_dataloader(path, imgsz, batch_size, model.stride.max(), opt, nc, pad=0.5, rect=True, test=True)[0]
 
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
@@ -96,7 +96,7 @@ def test(data,
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class, wandb_images = [], [], [], [], []
-    for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
+    for batch_i, (img, targets, paths, shapes, _) in enumerate(tqdm(dataloader, desc=s)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -106,7 +106,7 @@ def test(data,
         with torch.no_grad():
             # Run model
             t = time_synchronized()
-            output, _ = model(img, testing=True, augment=augment)
+            output, _, _ = model(img, testing=True, augment=augment)
             inf_out, train_out = output     # inference and training outputs
             t0 += time_synchronized() - t
 

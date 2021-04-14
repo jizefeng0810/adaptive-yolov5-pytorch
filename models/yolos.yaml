@@ -60,10 +60,9 @@ adapt:
    [20, 1, Adaptative_Conv, [128, _, _]], # 29 (adapt-large)
 
    [23, 1, Adaptative_Conv, [256, _, _]], # 30 (adapt-large)
+  ]
 
-#   [17, 1, DAInsHead, [6400, _, _]], # 28 (adapt-large)
-
-#   [20, 1, DAInsHead, [1600, _, _]], # 29 (adapt-large)
-
-#   [23, 1, DAInsHead, [400, _, _]], # 30 (adapt-large)
+regularize:
+  [
+    [9, 1, ICR, [3136, _, _]], # 31 (reg-icr)
   ]

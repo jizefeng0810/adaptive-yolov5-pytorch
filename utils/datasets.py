@@ -54,12 +54,13 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
-                      rank=-1, world_size=1, workers=8, image_weights=False):
+def create_dataloader(path, imgsz, batch_size, stride, opt, nc, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
+                      rank=-1, world_size=1, workers=8, image_weights=False, test=False):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                       augment=augment,  # augment images
+                                      class_num = nc,
                                       hyp=hyp,  # augmentation hyperparameters
                                       rect=rect,  # rectangular training
                                       cache_images=cache,
@@ -74,13 +75,21 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
     sampler = torch.utils.data.distributed.DistributedSampler(dataset) if rank != -1 else None
     loader = torch.utils.data.DataLoader if image_weights else InfiniteDataLoader
     # Use torch.utils.data.DataLoader() if dataset.properties will update during training else InfiniteDataLoader()
-    dataloader = loader(dataset,
-                        batch_size=batch_size,
-                        num_workers=nw,
-                        sampler=sampler,
-                        drop_last=True,
-                        pin_memory=True,
-                        collate_fn=LoadImagesAndLabels.collate_fn)
+    if test:
+        dataloader = loader(dataset,
+                            batch_size=batch_size,
+                            num_workers=nw,
+                            sampler=sampler,
+                            pin_memory=True,
+                            collate_fn=LoadImagesAndLabels.collate_fn)
+    else:
+        dataloader = loader(dataset,
+                            batch_size=batch_size,
+                            num_workers=nw,
+                            sampler=sampler,
+                            drop_last=True,
+                            pin_memory=True,
+                            collate_fn=LoadImagesAndLabels.collate_fn)
     return dataloader, dataset
 
 
@@ -336,8 +345,9 @@ def img2label_paths(img_paths):
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
-    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
+    def __init__(self, path, img_size=640, batch_size=16, augment=False, class_num=8, hyp=None, rect=False, image_weights=False,
                  cache_images=False, single_cls=False, stride=32, pad=0.0, rank=-1):
+        self.class_num = class_num
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -568,18 +578,27 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if nL:
             labels_out[:, 1:] = torch.from_numpy(labels)
 
+        # generate mutil label
+        one_hot = torch.zeros(self.class_num)
+        if nL:
+            category = torch.from_numpy(np.unique(labels[:, 0]).astype(np.int))
+            category = torch.unsqueeze(category, 1)
+            one_hot = torch.zeros(category.shape[0], self.class_num).scatter_(1, category, 1)
+            one_hot = torch.sum(one_hot, dim=0)
+            del category, labels
+
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
         img = np.ascontiguousarray(img)
 
-        return torch.from_numpy(img), labels_out, self.img_files[index], shapes
+        return torch.from_numpy(img), labels_out, self.img_files[index], shapes, one_hot
 
     @staticmethod
     def collate_fn(batch):
-        img, label, path, shapes = zip(*batch)  # transposed
+        img, label, path, shapes, onehot = zip(*batch)  # transposed
         for i, l in enumerate(label):
             l[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(img, 0), torch.cat(label, 0), path, shapes
+        return torch.stack(img, 0), torch.cat(label, 0), path, shapes, onehot
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------

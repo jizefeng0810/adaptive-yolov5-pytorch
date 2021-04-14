@@ -85,9 +85,9 @@ class QFocalLoss(nn.Module):
             return loss
 
 
-def compute_loss(p, targets, model, da_p=None):  # predictions, targets, model
+def compute_loss(p, targets, model, sone_hot=None, da_p=None, reg=None):  # predictions, targets, model
     device = targets.device
-    lcls, lbox, lobj, lda_img, lda_ins = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+    lcls, lbox, lobj, lda_img, lda_ins, licr = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
     tcls, tbox, indices, anchors = build_targets(p, targets, model)  # targets
     h = model.hyp  # hyperparameters
 
@@ -96,6 +96,7 @@ def compute_loss(p, targets, model, da_p=None):  # predictions, targets, model
     BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([h['obj_pw']])).to(device)
     BCEda_img = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([h['da_pw']])).to(device)
     BCEda_ins = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([h['da_pw']])).to(device)
+    BCEicr = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([h['icr_pw']])).to(device)
 
     # Class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
     cp, cn = smooth_BCE(eps=0.0)
@@ -109,14 +110,18 @@ def compute_loss(p, targets, model, da_p=None):  # predictions, targets, model
     # da classifier loss
     if da_p != None:
         for i, da_img_pre in enumerate(da_p):
+            bs, n = da_img_pre.size()
+            sbs = bs // 2
             if i < 3:
-                bs, n = da_img_pre.size()
                 da_img_target = torch.cat((torch.zeros((bs // 2, n)), (torch.ones(bs // 2, n)))).to(device)
                 lda_img += BCEda_img(da_img_pre, da_img_target)
             else:
-                bs, n = da_img_pre.size()
                 da_ins_target = torch.cat((torch.zeros((bs // 2, n)), (torch.ones(bs // 2, n)))).to(device)
                 lda_ins += BCEda_ins(da_img_pre, da_ins_target)
+        reg_icr = reg[:sbs, :]
+        sone_hot = torch.stack(sone_hot).to(device)
+        licr += BCEicr(reg_icr, sone_hot)
+        del reg_icr, reg
 
     # Losses
     nt = 0  # number of targets
@@ -159,11 +164,12 @@ def compute_loss(p, targets, model, da_p=None):  # predictions, targets, model
     lcls *= h['cls'] * s
     lda_img *= h['da_img'] * s
     lda_ins *= h['da_ins'] * s
+    licr *= h['icr_pw']
     bs = tobj.shape[0]  # batch size
 
     # lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1,device=device)
-    loss = lbox + lobj + lcls + lda_img + lda_ins
-    return loss * bs, torch.cat((lbox, lobj, lcls, lda_img, lda_ins, loss)).detach()
+    loss = lbox + lobj + lcls + lda_img + lda_ins + licr
+    return loss * bs, torch.cat((lbox, lobj, lcls, lda_img, lda_ins, licr, loss)).detach()
 
 
 def build_targets(p, targets, model):

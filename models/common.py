@@ -82,6 +82,25 @@ class DAInsHead(nn.Module):
         x = self.fc2_da(x)
         return x
 
+class ICR(nn.Module):
+    """
+        Image-Level Category Regulation
+    """
+    def __init__(self, c1, c2, nc, k=1, s=1, p=None, g=1, act=True):
+        super(ICR, self).__init__()
+        self.conv1 = nn.Conv2d(c1, 256, kernel_size=3, stride=2, bias=False)
+        self.conv2 = nn.Conv2d(256, 64, kernel_size=3, stride=1, bias=False)
+        self.fc = nn.Linear(c2, nc)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        x = torch.sigmoid(x)
+        return x
+
+
 class Bottleneck(nn.Module):
     # Standard bottleneck
     def __init__(self, c1, c2, shortcut=True, g=1, e=0.5):  # ch_in, ch_out, shortcut, groups, expansion
