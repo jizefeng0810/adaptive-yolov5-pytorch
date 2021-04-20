@@ -91,6 +91,9 @@ class ICR(nn.Module):
         self.conv1 = nn.Conv2d(c1, 256, kernel_size=3, stride=2, bias=False)
         self.conv2 = nn.Conv2d(256, 64, kernel_size=3, stride=1, bias=False)
         self.fc = nn.Linear(c2, nc)
+        # self.conv1 = nn.Conv2d(c1, 512, kernel_size=1, bias=False)
+        # self.conv2 = nn.Conv2d(512, 256, kernel_size=1, bias=False)
+        # self.conv3 = nn.Conv2d(256, nc, kernel_size=1, bias=False)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -98,6 +101,13 @@ class ICR(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         x = torch.sigmoid(x)
+
+        # x = nn.functional.adaptive_avg_pool2d(x, (1,1))
+        # x = F.relu(self.conv1(x))
+        # x = F.relu(self.conv2(x))
+        # x = self.conv3(x)
+        # x = x.view(x.size(0), -1)
+        # x = torch.sigmoid(x)
         return x
 
 
