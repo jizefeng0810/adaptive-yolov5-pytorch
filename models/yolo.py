@@ -92,7 +92,7 @@ class Model(nn.Module):
         m = self.model[24]  # Detect()
         if isinstance(m, Detect):
             s = 640  # 2x min stride
-            output, _, _ = self.forward(torch.zeros(4, ch, s, s), bs=2)
+            output, _, _ = self.forward(torch.zeros(4, ch, s, s), bs=2, testing=False)
             m.stride = torch.tensor([s / x.shape[-2] for x in output])  # forward
             m.anchors /= m.stride.view(-1, 1, 1)
             check_anchor_order(m)
@@ -140,7 +140,7 @@ class Model(nn.Module):
                 print('%10.1f%10.0f%10.1fms %-40s' % (o, m.np, dt[-1], m.type))
 
             if m.i != 24:
-                if testing and m.i >= 28: continue
+                if testing and m.i >= 25: continue
                 if m.i in [25, 26, 27, 28, 29, 30]:     # GRL img_feature
                     x = self.grl_img(x, alpha=alpha)
                 if m.i in [31]:

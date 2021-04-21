@@ -23,5 +23,5 @@ python train.py --sdata ./data/cityscapes_fake.yaml --tdata ./data/foggy_citylls
 python train.py --sdata ./data/bdd_daytime.yaml --tdata ./data/bdd_night.yaml --epochs 200 --batch-size 32 --weights ./weights/yolov5s.pt --cfg yolos.yaml
 python train.py --sdata ./data/bdd_daytime.yaml --tdata ./data/bdd_night.yaml --epochs 200 --batch-size 32 --weights runs/train/exp88/weights/last.pt --cfg yolos.yaml --resume
 
-python train.py --sdata ./data/bdd_daytime_fake.yaml --tdata ./data/bdd_night.yaml --epochs 200 --batch-size 32 --weights ./weights/yolov5s.pt --cfg yolos.yaml
-python train.py --sdata ./data/bdd_daytime_fake.yaml --tdata ./data/bdd_night.yaml --epochs 200 --batch-size 32 --weights runs/train/exp88/weights/last.pt --cfg yolos.yaml --resume
+python train.py --sdata ./data/bdd_daytime_fake.yaml --tdata ./data/bdd_night.yaml --epochs 200 --batch-size 32 --weights ./weights/yolov5s.pt --cfg yolos.yaml --hyp data/hyp.scratch_bdd.yaml
+python train.py --sdata ./data/bdd_daytime_fake.yaml --tdata ./data/bdd_night.yaml --epochs 200 --batch-size 32 --weights runs/train/exp88/weights/last.pt --cfg yolos.yaml --hyp data/hyp.scratch_bdd.yaml --resume
