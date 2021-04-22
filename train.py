@@ -190,26 +190,26 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank)
 
     # Trainloader
-    sdataloader, sdataset = create_dataloader(strain_path, imgsz, batch_size, gs, opt,
+    sdataloader, sdataset = create_dataloader(strain_path, imgsz, batch_size, gs, opt, snc,
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights)
     mlc = np.concatenate(sdataset.labels, 0)[:, 0].max()  # max label class
     nb = len(sdataloader)  # number of batches
     assert mlc < snc, 'Source domain label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, snc, opt.sdata, snc - 1)
-    tdataloader, tdataset = create_dataloader(ttrain_path, imgsz, batch_size, gs, opt,
+    tdataloader, tdataset = create_dataloader(ttrain_path, imgsz, batch_size, gs, opt, tnc,
                                               hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                               world_size=opt.world_size, workers=opt.workers,
                                               image_weights=opt.image_weights)
     mlc = np.concatenate(tdataset.labels, 0)[:, 0].max()  # max label class
-    nb = len(tdataloader)  # number of batches
+    # nb = len(tdataloader)  # number of batches
     assert mlc < tnc, 'Target domain label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, tnc, opt.tdata, tnc - 1)
 
     # Process 0
     if rank in [-1, 0]:
         ema.updates = start_epoch * nb // accumulate  # set EMA updates
-        ttestloader = create_dataloader(ttest_path, imgsz_test, total_batch_size, gs, opt,  # target domain testloader
-                                       hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True,
+        ttestloader = create_dataloader(ttest_path, imgsz_test, total_batch_size, gs, opt, tnc, # target domain testloader
+                                       hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True, test=True,
                                        rank=-1, world_size=opt.world_size, workers=opt.workers, pad=0.5)[0]
 
         if not opt.resume:
@@ -266,23 +266,26 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
-        mloss = torch.zeros(5, device=device)  # mean losses
+        mloss = torch.zeros(7, device=device)  # mean losses
         if rank != -1:
             sdataloader.sampler.set_epoch(epoch)
             tdataloader.sampler.set_epoch(epoch)
         pbar = enumerate(zip(sdataloader, tdataloader))
-        logger.info(('\n' + '%10s' * 9) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'da', 'total', 'targets', 'img_size'))
+        logger.info(('\n' + '%10s' * 11) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'da_img', 'da_ins', 'icr', 'total', 'targets', 'img_size'))
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
         for i, (sbatch, tbatch) in pbar:  # batch -------------------------------------------------------------
-            simgs, stargets, spaths, _ = sbatch
-            timgs, ttargets, tpaths, _ = tbatch
+            simgs, stargets, spaths, _, sone_hot = sbatch
+            timgs, ttargets, tpaths, _, _ = tbatch
+
+            bs_simgs, _, _, _ = simgs.shape
+            # timgs, ttargets, tpaths = timgs[:bs_simgs], ttargets[:bs_simgs], tpaths[:bs_simgs]
+
             ni = i + nb * epoch  # number integrated batches (since train start)
             simgs = simgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
             timgs = timgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
             imgs = torch.cat((simgs, timgs))
-            bs_simgs, _, _, _ = simgs.shape
 
             p = float((ni + 1.) / (nb * epochs))
             alpha = (2. / (1. + np.exp(-10 * p)) - 1)
@@ -307,8 +310,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 
             # Forward
             with amp.autocast(enabled=cuda):
-                pred, da_img_pre = model(imgs, alpha=alpha, bs=bs_simgs, da=True)  # forward
-                loss, loss_items = compute_loss(pred, stargets.to(device), model, da_p=da_img_pre)  # loss scaled by batch_size
+                pred, da_img_pre, reg_icr = model(imgs, alpha=alpha, bs=bs_simgs, da=True)  # forward
+                loss, loss_items = compute_loss(pred, stargets.to(device), model, sone_hot=sone_hot, da_p=da_img_pre, reg=reg_icr)  # loss scaled by batch_size
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
 
@@ -327,7 +330,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             if rank in [-1, 0]:
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-                s = ('%10s' * 2 + '%10.4g' * 7) % (
+                s = ('%10s' * 2 + '%10.4g' * 9) % (
                     '%g/%g' % (epoch, epochs - 1), mem, *mloss, stargets.shape[0], simgs.shape[-1])
                 pbar.set_description(s)
 

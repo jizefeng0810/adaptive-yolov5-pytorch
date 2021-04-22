@@ -11,7 +11,7 @@ import torch.nn as nn
 sys.path.append('./')  # to run '$ python *.py' files in subdirectories
 logger = logging.getLogger(__name__)
 
-from models.common import Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, Concat, NMS, autoShape, Adaptative_Conv
+from models.common import Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, Concat, NMS, autoShape, Adaptative_Conv, DAInsHead, ICR
 from models.experimental import MixConv2d, CrossConv, C3
 from utils.autoanchor import check_anchor_order
 from utils.general import make_divisible, check_file, set_logging
@@ -83,7 +83,7 @@ class Model(nn.Module):
             logger.info('Overriding model.yaml nc=%g with nc=%g' % (self.yaml['nc'], nc))
             self.yaml['nc'] = nc  # override yaml value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist, ch_out
-        self.da_layers = [25, 26, 27]
+        self.da_layers = [25, 26, 27, 28, 29, 30]
         self.grl_img = GradientScalarLayer(-1.0 * .1)
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
@@ -91,8 +91,8 @@ class Model(nn.Module):
         # Build strides, anchors
         m = self.model[24]  # Detect()
         if isinstance(m, Detect):
-            s = 128  # 2x min stride
-            output, _ = self.forward(torch.zeros(2, ch, s, s))
+            s = 640  # 2x min stride
+            output, _, _ = self.forward(torch.zeros(4, ch, s, s), bs=2)
             m.stride = torch.tensor([s / x.shape[-2] for x in output])  # forward
             m.anchors /= m.stride.view(-1, 1, 1)
             check_anchor_order(m)
@@ -105,7 +105,7 @@ class Model(nn.Module):
         self.info()
         logger.info('')
 
-    def forward(self, x, bs=0, da=False, alpha=1.0, augment=False, profile=False):
+    def forward(self, x, testing=False, bs=0, da=False, alpha=1.0, augment=False, profile=False):
         if augment:
             img_size = x.shape[-2:]  # height, width
             s = [1, 0.83, 0.67]  # scales
@@ -123,10 +123,10 @@ class Model(nn.Module):
                 y.append(yi)
             return torch.cat(y, 1), None  # augmented inference, train
         else:
-            return self.forward_once(x, bs, alpha, da, profile)  # single-scale inference, train
+            return self.forward_once(x, testing, bs, alpha, da, profile)  # single-scale inference, train
 
-    def forward_once(self, x, bs=0, alpha=1.0, da=False, profile=False):
-        y, dt, da_save = [], [], []  # outputs
+    def forward_once(self, x, testing=False, bs=1, alpha=1.0, da=False, profile=False):
+        y, dt, da_save, reg = [], [], [], 0  # outputs
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
@@ -140,17 +140,23 @@ class Model(nn.Module):
                 print('%10.1f%10.0f%10.1fms %-40s' % (o, m.np, dt[-1], m.type))
 
             if m.i != 24:
-                if m.i in [25, 26, 27]:     # GRL img_feature
+                if testing and m.i >= 28: continue
+                if m.i in [25, 26, 27, 28, 29, 30]:     # GRL img_feature
                     x = self.grl_img(x, alpha=alpha)
-                x = m(x)  # run
-                y.append(x if m.i in self.save else None)  # save output
+                if m.i in [31]:
+                    # all_bs, _, _, _ = x.shape
+                    # x, _ = torch.split(x, [bs, all_bs-bs])
+                    reg = m(x)
+                else:
+                    x = m(x)  # run
+                    y.append(x if m.i in self.save else None)  # save output
 
                 if m.i in self.da_layers:
                     da_save.append(x.view(x.size(0), -1))
             else:
                 if da == True:
                     x_output = x
-                    for i,s in enumerate(x):
+                    for i, s in enumerate(x):
                         all_bs, _, _, _ = s.shape
                         s, _ = torch.split(s, [bs, all_bs-bs])
                         x_output[i] = s
@@ -161,7 +167,7 @@ class Model(nn.Module):
         if profile:
             print('%.1fms total' % sum(dt))
 
-        return x_output, da_save
+        return x_output, da_save, reg
 
     def _initialize_biases(self, cf=None):  # initialize biases into Detect(), cf is class frequency
         # https://arxiv.org/abs/1708.02002 section 3.3
@@ -225,7 +231,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
     no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
 
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
-    for i, (f, n, m, args) in enumerate(d['backbone'] + d['head'] + d['adapt']):  # from, number, module, args
+    for i, (f, n, m, args) in enumerate(d['backbone'] + d['head'] + d['adapt'] + d['regularize']):  # from, number, module, args
         m = eval(m) if isinstance(m, str) else m  # eval strings
         for j, a in enumerate(args):
             try:
@@ -234,8 +240,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                 pass
 
         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [Conv, Adaptative_Conv, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
-            (c1, c2) = (ch[f], args[0]) if i not in [25, 26, 27] else (ch[f+1], args[0])
+        if m in [Conv, Adaptative_Conv, DAInsHead, ICR, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
+            (c1, c2) = (ch[f], args[0]) if i not in [25, 26, 27, 28, 29, 30, 31] else (ch[f+1], args[0])
 
             if i <= 24: # detect model
                 c2 = make_divisible(c2 * gw, 8) if c2 != no else c2
@@ -244,6 +250,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             if m in [BottleneckCSP, C3]:
                 args.insert(2, n)
                 n = 1
+            if m in [ICR]:
+                args.insert(2, nc)
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:

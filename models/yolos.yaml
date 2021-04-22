@@ -54,4 +54,15 @@ adapt:
    [14, 1, Adaptative_Conv, [128, _, _]], # 26 (adapt-medium)
 
    [10, 1, Adaptative_Conv, [256, _, _]], # 27 (adapt-large)
+
+   [17, 1, Adaptative_Conv, [128, _, _]], # 28 (adapt-large)
+
+   [20, 1, Adaptative_Conv, [128, _, _]], # 29 (adapt-large)
+
+   [23, 1, Adaptative_Conv, [256, _, _]], # 30 (adapt-large)
+  ]
+
+regularize:
+  [
+    [9, 1, ICR, [3136, _, _]], # 31 (reg-icr)
   ]
