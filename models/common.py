@@ -57,6 +57,59 @@ class Adaptative_Conv(nn.Module):
     def fuseforward(self, x):
         return self.act(self.conv(x))
 
+class DAInsHead(nn.Module):
+    """
+    Adds a simple Instance-level Domain Classifier head
+    """
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):
+        super(DAInsHead, self).__init__()
+        self.conv = nn.Conv2d(c1, 1, kernel_size=1, stride=1)
+        self.fc1_da = nn.Linear(c2, 512)
+        self.fc2_da = nn.Linear(512, c2)
+        for l in [self.fc1_da, self.conv]:
+            nn.init.normal_(l.weight, std=0.1)
+            nn.init.constant_(l.bias, 0)
+        nn.init.normal_(self.fc2_da.weight, std=0.05)
+        nn.init.constant_(self.fc2_da.bias, 0)
+
+    def forward(self, x):
+        x = F.relu(self.conv(x))
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1_da(x))
+        x = F.dropout(x, p=0.5, training=self.training)
+
+        x = self.fc2_da(x)
+        return x
+
+class ICR(nn.Module):
+    """
+        Image-Level Category Regulation
+    """
+    def __init__(self, c1, c2, nc, k=1, s=1, p=None, g=1, act=True):
+        super(ICR, self).__init__()
+        self.conv1 = nn.Conv2d(c1, 256, kernel_size=3, stride=2, bias=False)
+        self.conv2 = nn.Conv2d(256, 64, kernel_size=3, stride=1, bias=False)
+        self.fc = nn.Linear(c2, nc)
+        # self.conv1 = nn.Conv2d(c1, 512, kernel_size=1, bias=False)
+        # self.conv2 = nn.Conv2d(512, 256, kernel_size=1, bias=False)
+        # self.conv3 = nn.Conv2d(256, nc, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        x = torch.sigmoid(x)
+
+        # x = nn.functional.adaptive_avg_pool2d(x, (1,1))
+        # x = F.relu(self.conv1(x))
+        # x = F.relu(self.conv2(x))
+        # x = self.conv3(x)
+        # x = x.view(x.size(0), -1)
+        # x = torch.sigmoid(x)
+        return x
+
 
 class Bottleneck(nn.Module):
     # Standard bottleneck
@@ -201,7 +254,7 @@ class Detections:
         self.imgs = imgs  # list of images as numpy arrays
         self.pred = pred  # list of tensors pred[0] = (xyxy, conf, cls)
         self.names = names  # class names
-        self.xyxy = pred  # xyxy pixels
+        self.xyxy = pred  # xyxy pixels2tian
         self.xywh = [xyxy2xywh(x) for x in pred]  # xywh pixels
         self.xyxyn = [x / g for x, g in zip(self.xyxy, gn)]  # xyxy normalized
         self.xywhn = [x / g for x, g in zip(self.xywh, gn)]  # xywh normalized
